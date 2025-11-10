@@ -6,7 +6,15 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+node_modules/
 .npm-cache/
+.npm-cache-local/
+dist/
+.DS_Store
+.env
+server/dist/
+action-formula-app/dist/
+action-formula-app/.npm-cache-local/
 
 node_modules
 dist
