@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { SignInPrompt } from '../components/common/SignInPrompt'
+import { useAuth } from '../contexts/AuthContext'
 import { fetchSupportPlan, saveSupportPlan } from '../services/support'
 
 const supportOptions = [
@@ -26,6 +28,7 @@ export const SupportPage = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { user, loading: authLoading } = useAuth()
 
   const toggleSupport = (id: string) => {
     setMessage(null)
@@ -40,6 +43,11 @@ export const SupportPage = () => {
   }
 
   const loadPlan = async () => {
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
       const response = await fetchSupportPlan()
@@ -58,9 +66,14 @@ export const SupportPage = () => {
 
   useEffect(() => {
     void loadPlan()
-  }, [])
+  }, [user])
 
   const handleSave = async () => {
+    if (!user) {
+      setError('Сначала войдите через Google, чтобы сохранить план поддержки.')
+      return
+    }
+
     setIsSaving(true)
     setError(null)
     setMessage(null)
@@ -76,6 +89,34 @@ export const SupportPage = () => {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="container">
+        <section className="section">
+          <h1 className="section-heading">Настройте систему поддержки</h1>
+          <p className="section-subtitle">Загружаем данные профиля...</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container">
+        <section className="section surface-panel surface-panel--accent">
+          <h1 className="section-heading">Настройте систему поддержки</h1>
+          <p className="section-subtitle">
+            Войдите через Google, чтобы сохранять ваш план поддержки и быстро к нему возвращаться.
+          </p>
+          <SignInPrompt
+            title="Войдите, чтобы сохранять план поддержки"
+            description="Персональный план поможет не терять фокус. Авторизуйтесь, чтобы мы сохранили ваши настройки."
+          />
+        </section>
+      </div>
+    )
   }
 
   return (

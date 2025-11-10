@@ -12,11 +12,9 @@ export type SupportPayload = {
   supporters: string[]
   commitments: string[]
   notes?: string
-  userId?: string
 }
 
-export const fetchSupportPlan = (params?: { userId?: string }) =>
-  http<{ item: SupportPlan | null }>(`/support${params?.userId ? `?userId=${params.userId}` : ''}`)
+export const fetchSupportPlan = () => http<{ item: SupportPlan | null }>('/support')
 
 export const saveSupportPlan = (payload: SupportPayload) =>
   http<{ item: SupportPlan }>('/support', {

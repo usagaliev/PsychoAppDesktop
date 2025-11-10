@@ -1,6 +1,8 @@
-import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
+import { SignInPrompt } from '../components/common/SignInPrompt'
+import { useAuth } from '../contexts/AuthContext'
 import { fetchDiagnostics, type DiagnosticsResult } from '../services/diagnostics'
 
 const formulaCards = [
@@ -54,13 +56,22 @@ export const HomePage = () => {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult[]>([])
   const [isLoadingDiagnostics, setIsLoadingDiagnostics] = useState(true)
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null)
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
     const loadDiagnostics = async () => {
+      if (!user) {
+        setDiagnostics([])
+        setDiagnosticsError(null)
+        setIsLoadingDiagnostics(false)
+        return
+      }
+
       try {
         setIsLoadingDiagnostics(true)
         const response = await fetchDiagnostics()
         setDiagnostics(response.items)
+        setDiagnosticsError(null)
       } catch (err) {
         setDiagnosticsError(err instanceof Error ? err.message : 'Не удалось загрузить результаты диагностики')
       } finally {
@@ -69,7 +80,7 @@ export const HomePage = () => {
     }
 
     void loadDiagnostics()
-  }, [])
+  }, [user])
 
   const latestDiagnostics = useMemo(() => diagnostics.slice(0, 3), [diagnostics])
 
@@ -164,7 +175,18 @@ export const HomePage = () => {
           </Link>
         </div>
 
-        {isLoadingDiagnostics ? (
+        {authLoading ? (
+          <p className="section-subtitle" style={{ marginTop: '24px' }}>
+            Проверяем ваш профиль...
+          </p>
+        ) : !user ? (
+          <div style={{ marginTop: '24px' }}>
+            <SignInPrompt
+              title="Сохраните свои результаты в личном кабинете"
+              description="Войдите через Google, и мы сохраним историю диагностик, журнал и план поддержки."
+            />
+          </div>
+        ) : isLoadingDiagnostics ? (
           <p className="section-subtitle" style={{ marginTop: '24px' }}>
             Загружаем последние результаты...
           </p>

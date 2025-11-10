@@ -1,4 +1,7 @@
+import { GoogleLogin } from '@react-oauth/google'
 import { NavLink } from 'react-router-dom'
+
+import { useAuth } from '../../contexts/AuthContext'
 
 const navLinks = [
   { to: '/', label: 'Материалы' },
@@ -9,6 +12,8 @@ const navLinks = [
 ]
 
 export const Header = () => {
+  const { user, loginWithCredential, logout, loading } = useAuth()
+
   return (
     <header className="app-header">
       <div className="app-header__inner">
@@ -34,6 +39,37 @@ export const Header = () => {
             <span className="cta-button">Пройти диагностику</span>
           </NavLink>
         </nav>
+
+        <div className="app-header__auth">
+          {user ? (
+            <div className="auth-user">
+              {user.avatarUrl ? (
+                <img className="auth-user__avatar" src={user.avatarUrl} alt={user.name ?? user.email} />
+              ) : (
+                <span className="auth-user__placeholder">{user.name?.[0] ?? user.email[0]}</span>
+              )}
+              <div className="auth-user__meta">
+                <span className="auth-user__name">{user.name ?? user.email}</span>
+                <button type="button" className="ghost-button" onClick={() => void logout()}>
+                  Выйти
+                </button>
+              </div>
+            </div>
+          ) : loading ? (
+            <span className="auth-loading">Подключаем профиль...</span>
+          ) : (
+            <GoogleLogin
+              shape="pill"
+              theme="outline"
+              size="medium"
+              onSuccess={(credentialResponse) => {
+                if (credentialResponse.credential) {
+                  void loginWithCredential(credentialResponse.credential)
+                }
+              }}
+            />
+          )}
+        </div>
       </div>
     </header>
   )

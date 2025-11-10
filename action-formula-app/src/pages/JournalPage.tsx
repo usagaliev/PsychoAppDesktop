@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { SignInPrompt } from '../components/common/SignInPrompt'
+import { useAuth } from '../contexts/AuthContext'
 import {
   fetchJournalEntries,
   createJournalEntry,
@@ -33,6 +35,7 @@ export const JournalPage = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { user, loading: authLoading } = useAuth()
 
   const templateKey = searchParams.get('template')
 
@@ -47,6 +50,12 @@ export const JournalPage = () => {
 
   useEffect(() => {
     const loadEntries = async () => {
+      if (!user) {
+        setEntries([])
+        setIsLoading(false)
+        return
+      }
+
       try {
         setIsLoading(true)
         const response = await fetchJournalEntries()
@@ -59,7 +68,7 @@ export const JournalPage = () => {
     }
 
     void loadEntries()
-  }, [])
+  }, [user])
 
   const orderedEntries = useMemo(() => {
     return [...entries].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -68,6 +77,10 @@ export const JournalPage = () => {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!title || !content) return
+    if (!user) {
+      setError('Чтобы сохранять заметки, войдите через Google.')
+      return
+    }
 
     try {
       setIsSaving(true)
@@ -93,6 +106,11 @@ export const JournalPage = () => {
   }
 
   const handleDelete = async (id: string) => {
+    if (!user) {
+      setError('Войдите через Google, чтобы управлять заметками.')
+      return
+    }
+
     try {
       setPendingDelete(id)
       await deleteJournalEntry(id)
@@ -102,6 +120,34 @@ export const JournalPage = () => {
     } finally {
       setPendingDelete(null)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="container">
+        <section className="section">
+          <h1 className="section-heading">Журнал превращения знаний в действия</h1>
+          <p className="section-subtitle">Загружаем данные профиля...</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container">
+        <section className="section surface-panel surface-panel--accent">
+          <h1 className="section-heading">Журнал превращения знаний в действия</h1>
+          <p className="section-subtitle">
+            Войдите через Google, чтобы сохранять заметки, шаблоны и отслеживать прогресс.
+          </p>
+          <SignInPrompt
+            title="Войдите, чтобы вести журнал"
+            description="После входа все записи сохранятся в вашем профиле, и вы сможете к ним возвращаться с любого устройства."
+          />
+        </section>
+      </div>
+    )
   }
 
   return (

@@ -7,7 +7,6 @@ export type DiagnosticsPayload = {
   valueScore: number
   planScore: number
   selfScore: number
-  userId?: string
   goalId?: string
 }
 

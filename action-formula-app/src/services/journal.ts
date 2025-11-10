@@ -13,7 +13,6 @@ export type CreateJournalEntryPayload = {
   title: string
   content: string
   templateKey?: string
-  userId?: string
 }
 
 export const fetchJournalEntries = () => http<{ items: JournalEntry[] }>('/journal')

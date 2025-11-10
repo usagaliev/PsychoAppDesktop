@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
+import { SignInPrompt } from '../components/common/SignInPrompt'
+import { useAuth } from '../contexts/AuthContext'
 import { createDiagnostics, type FormulaComponent } from '../services/diagnostics'
 
 const initialScores = {
@@ -49,7 +51,14 @@ export const DiagnosticsPage = () => {
     setScores((prev) => ({ ...prev, [key]: nextValue }))
   }
 
+  const { user, loading: authLoading } = useAuth()
+
   const handleSubmit = async () => {
+    if (!user) {
+      setError('Чтобы сохранить результат, выполните вход через Google.')
+      return
+    }
+
     setIsSaving(true)
     setError(null)
     try {
@@ -69,6 +78,34 @@ export const DiagnosticsPage = () => {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  if (authLoading) {
+    return (
+      <div className="container">
+        <section className="section surface-panel">
+          <h1 className="section-heading">Быстрая диагностика формулы действия</h1>
+          <p className="section-subtitle">Подготавливаем все данные...</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container">
+        <section className="section surface-panel surface-panel--accent">
+          <h1 className="section-heading">Быстрая диагностика формулы действия</h1>
+          <p className="section-subtitle">
+            Войдите через Google, чтобы сохранять результаты и отслеживать динамику по каждому компоненту формулы.
+          </p>
+          <SignInPrompt
+            title="Войдите, чтобы сохранить диагностику"
+            description="После входа вы сможете возвращаться к истории оценок и видеть динамику."
+          />
+        </section>
+      </div>
+    )
   }
 
   return (
