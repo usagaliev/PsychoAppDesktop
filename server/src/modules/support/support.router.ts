@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { asyncHandler } from '../../utils/asyncHandler'
 import { prisma } from '../../config/prisma'
+import { requireUser } from '../../middleware/auth'
 
 const supportRouter = Router()
 
@@ -10,16 +11,15 @@ const upsertSchema = z.object({
   supporters: z.array(z.string()),
   commitments: z.array(z.string()),
   notes: z.string().optional(),
-  userId: z.string().optional(),
 })
+
+supportRouter.use(requireUser)
 
 supportRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const userId = req.query.userId?.toString()
-
     const plan = await prisma.supportPlan.findFirst({
-      ...(userId ? { where: { userId } } : {}),
+      where: { userId: req.userId! },
     })
 
     res.json({ item: plan })
@@ -31,8 +31,6 @@ supportRouter.put(
   asyncHandler(async (req, res) => {
     const payload = upsertSchema.parse(req.body)
 
-    const where = payload.userId ? { userId: payload.userId } : { id: 'default-plan' }
-
     const updateData = {
       supporters: payload.supporters,
       commitments: payload.commitments,
@@ -40,14 +38,14 @@ supportRouter.put(
     }
 
     const createData = {
+      userId: req.userId!,
       supporters: payload.supporters,
       commitments: payload.commitments,
       ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
-      ...(payload.userId ? { userId: payload.userId } : { id: 'default-plan' }),
     }
 
     const item = await prisma.supportPlan.upsert({
-      where,
+      where: { userId: req.userId! },
       update: updateData,
       create: createData,
     })

@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { asyncHandler } from '../../utils/asyncHandler'
 import { prisma } from '../../config/prisma'
+import { requireUser } from '../../middleware/auth'
 
 const goalsRouter = Router()
 
@@ -11,18 +12,17 @@ const createSchema = z.object({
   description: z.string().optional(),
   status: z.enum(['PLANNED', 'IN_PROGRESS', 'COMPLETED']).optional(),
   targetDate: z.coerce.date().optional(),
-  userId: z.string().optional(),
 })
 
 const updateSchema = createSchema.partial()
 
+goalsRouter.use(requireUser)
+
 goalsRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const userId = req.query.userId?.toString()
-
     const items = await prisma.goal.findMany({
-      ...(userId ? { where: { userId } } : {}),
+      where: { userId: req.userId! },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -30,12 +30,12 @@ goalsRouter.get(
   }),
 )
 
-const buildGoalCreateData = (payload: z.infer<typeof createSchema>) => ({
+const buildGoalCreateData = (payload: z.infer<typeof createSchema>, userId: string) => ({
   title: payload.title,
   status: payload.status ?? 'PLANNED',
   ...(payload.description !== undefined ? { description: payload.description } : {}),
   ...(payload.targetDate !== undefined ? { targetDate: payload.targetDate } : {}),
-  ...(payload.userId !== undefined ? { userId: payload.userId } : {}),
+  userId,
 })
 
 goalsRouter.post(
@@ -44,7 +44,7 @@ goalsRouter.post(
     const payload = createSchema.parse(req.body)
 
     const item = await prisma.goal.create({
-      data: buildGoalCreateData(payload),
+      data: buildGoalCreateData(payload, req.userId!),
     })
 
     res.status(201).json({ item })
@@ -61,7 +61,9 @@ goalsRouter.put(
 
     const payload = updateSchema.parse(req.body)
 
-    const existing = await prisma.goal.findUnique({ where: { id } })
+    const existing = await prisma.goal.findFirst({
+      where: { id, userId: req.userId! },
+    })
     if (!existing) {
       return res.status(404).json({ message: 'Goal not found' })
     }
@@ -71,7 +73,6 @@ goalsRouter.put(
       ...(payload.description !== undefined ? { description: payload.description } : {}),
       ...(payload.status !== undefined ? { status: payload.status } : {}),
       ...(payload.targetDate !== undefined ? { targetDate: payload.targetDate } : {}),
-      ...(payload.userId !== undefined ? { userId: payload.userId } : {}),
     }
 
     const item = await prisma.goal.update({

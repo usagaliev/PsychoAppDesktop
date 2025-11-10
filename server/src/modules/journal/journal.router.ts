@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { asyncHandler } from '../../utils/asyncHandler'
 import { prisma } from '../../config/prisma'
+import { requireUser } from '../../middleware/auth'
 
 const journalRouter = Router()
 
@@ -10,15 +11,17 @@ const createSchema = z.object({
   title: z.string().min(1),
   content: z.string().min(1),
   templateKey: z.string().optional(),
-  userId: z.string().optional(),
 })
 
 const updateSchema = createSchema.partial()
 
+journalRouter.use(requireUser)
+
 journalRouter.get(
   '/',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const items = await prisma.journalEntry.findMany({
+      where: { userId: req.userId! },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -36,7 +39,7 @@ journalRouter.post(
         title: payload.title,
         content: payload.content,
         ...(payload.templateKey !== undefined ? { templateKey: payload.templateKey } : {}),
-        ...(payload.userId !== undefined ? { userId: payload.userId } : {}),
+        userId: req.userId!,
       },
     })
 
@@ -54,7 +57,9 @@ journalRouter.put(
 
     const payload = updateSchema.parse(req.body)
 
-    const existing = await prisma.journalEntry.findUnique({ where: { id } })
+    const existing = await prisma.journalEntry.findFirst({
+      where: { id, userId: req.userId! },
+    })
     if (!existing) {
       return res.status(404).json({ message: 'Entry not found' })
     }
@@ -63,7 +68,6 @@ journalRouter.put(
       ...(payload.title !== undefined ? { title: payload.title } : {}),
       ...(payload.content !== undefined ? { content: payload.content } : {}),
       ...(payload.templateKey !== undefined ? { templateKey: payload.templateKey } : {}),
-      ...(payload.userId !== undefined ? { userId: payload.userId } : {}),
     }
 
     const item = await prisma.journalEntry.update({
@@ -83,7 +87,9 @@ journalRouter.delete(
       return res.status(400).json({ message: 'Entry id is required' })
     }
 
-    const existing = await prisma.journalEntry.findUnique({ where: { id } })
+    const existing = await prisma.journalEntry.findFirst({
+      where: { id, userId: req.userId! },
+    })
     if (!existing) {
       return res.status(404).json({ message: 'Entry not found' })
     }

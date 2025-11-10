@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { asyncHandler } from '../../utils/asyncHandler'
 import { prisma } from '../../config/prisma'
+import { requireUser } from '../../middleware/auth'
 
 const diagnosticsRouter = Router()
 
@@ -11,14 +12,16 @@ const createSchema = z.object({
   valueScore: z.number().min(0).max(10),
   planScore: z.number().min(0).max(10),
   selfScore: z.number().min(0).max(10),
-  userId: z.string().optional(),
   goalId: z.string().optional(),
 })
 
+diagnosticsRouter.use(requireUser)
+
 diagnosticsRouter.get(
   '/',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const items = await prisma.diagnosticsResult.findMany({
+      where: { userId: req.userId! },
       orderBy: { createdAt: 'desc' },
       include: {
         goal: true,
@@ -37,6 +40,20 @@ diagnosticsRouter.post(
   asyncHandler(async (req, res) => {
     const payload = createSchema.parse(req.body)
 
+    if (payload.goalId) {
+      const goal = await prisma.goal.findFirst({
+        where: {
+          id: payload.goalId,
+          userId: req.userId!,
+        },
+        select: { id: true },
+      })
+
+      if (!goal) {
+        return res.status(400).json({ message: 'Goal reference is invalid' })
+      }
+    }
+
     const motivationIndex = computeMotivationIndex(payload)
     const weakest = weakestComponent(payload)
 
@@ -48,7 +65,7 @@ diagnosticsRouter.post(
         selfScore: payload.selfScore,
         motivationIndex,
         weakestComponent: weakest,
-        ...(payload.userId ? { userId: payload.userId } : {}),
+        userId: req.userId!,
         ...(payload.goalId ? { goalId: payload.goalId } : {}),
       },
     })

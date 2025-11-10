@@ -5,23 +5,37 @@ const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.en
 
 dotenv.config({ path: path.resolve(process.cwd(), envFile) })
 
+type NodeEnv = 'development' | 'production' | 'test'
+
 type Env = {
   PORT: number
-  DATABASE_URL?: string
+  DATABASE_URL: string
   CLIENT_ORIGIN?: string
-  NODE_ENV: 'development' | 'production' | 'test'
+  NODE_ENV: NodeEnv
+  GOOGLE_CLIENT_ID: string
+  GOOGLE_CLIENT_SECRET: string
+  JWT_SECRET: string
+  SESSION_COOKIE_NAME: string
 }
 
-const raw = {
-  PORT: process.env.PORT ?? '4000',
-  DATABASE_URL: process.env.DATABASE_URL,
-  CLIENT_ORIGIN: process.env.CLIENT_ORIGIN,
-  NODE_ENV: (process.env.NODE_ENV ?? 'development') as Env['NODE_ENV'],
+const ensure = (value: string | undefined, key: string): string => {
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`)
+  }
+  return value
 }
+
+const rawNodeEnv = (process.env.NODE_ENV ?? 'development') as NodeEnv
+
+const clientOrigin = process.env.CLIENT_ORIGIN
 
 export const env: Env = {
-  PORT: Number(raw.PORT) || 4000,
-  NODE_ENV: raw.NODE_ENV,
-  ...(raw.CLIENT_ORIGIN ? { CLIENT_ORIGIN: raw.CLIENT_ORIGIN } : {}),
-  ...(raw.DATABASE_URL ? { DATABASE_URL: raw.DATABASE_URL } : {}),
+  PORT: Number(process.env.PORT ?? '4000') || 4000,
+  NODE_ENV: rawNodeEnv,
+  DATABASE_URL: ensure(process.env.DATABASE_URL, 'DATABASE_URL'),
+  ...(clientOrigin ? { CLIENT_ORIGIN: clientOrigin } : {}),
+  GOOGLE_CLIENT_ID: ensure(process.env.GOOGLE_CLIENT_ID, 'GOOGLE_CLIENT_ID'),
+  GOOGLE_CLIENT_SECRET: ensure(process.env.GOOGLE_CLIENT_SECRET, 'GOOGLE_CLIENT_SECRET'),
+  JWT_SECRET: ensure(process.env.JWT_SECRET, 'JWT_SECRET'),
+  SESSION_COOKIE_NAME: process.env.SESSION_COOKIE_NAME ?? 'afc_session',
 }

@@ -27,28 +27,30 @@ enum FormulaComponent {
 }
 
 model User {
-  id        String             @id @default(cuid())
-  email     String?            @unique
-  name      String?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id         String   @id @default(cuid())
+  googleId   String   @unique
+  email      String   @unique
+  name       String?
+  avatarUrl  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  goals       Goal[]
-  diagnostics DiagnosticsResult[]
-  journal     JournalEntry[]
-  supportPlan SupportPlan?
+  goals         Goal[]
+  diagnostics   DiagnosticsResult[]
+  journal       JournalEntry[]
+  supportPlan   SupportPlan?
 }
 
 model Goal {
-  id          String             @id @default(cuid())
-  userId      String?
-  user        User?              @relation(fields: [userId], references: [id])
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id])
   title       String
   description String?
-  status      GoalStatus         @default(PLANNED)
+  status      GoalStatus @default(PLANNED)
   targetDate  DateTime?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   diagnostics DiagnosticsResult[]
 
@@ -57,8 +59,8 @@ model Goal {
 
 model DiagnosticsResult {
   id               String            @id @default(cuid())
-  userId           String?
-  user             User?             @relation(fields: [userId], references: [id])
+  userId           String
+  user             User              @relation(fields: [userId], references: [id])
   goalId           String?
   goal             Goal?             @relation(fields: [goalId], references: [id])
   goalSummary      String
@@ -68,31 +70,32 @@ model DiagnosticsResult {
   motivationIndex  Int
   weakestComponent FormulaComponent
   createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
 
   @@index([userId])
   @@index([goalId])
 }
 
 model JournalEntry {
-  id         String   @id @default(cuid())
-  userId     String?
-  user       User?    @relation(fields: [userId], references: [id])
-  title      String
-  content    String
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  title       String
+  content     String
   templateKey String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId, createdAt])
 }
 
 model SupportPlan {
-  id           String   @id @default(cuid())
-  userId       String?  @unique
-  user         User?    @relation(fields: [userId], references: [id])
-  supporters   Json
-  commitments  Json
-  notes        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  supporters  Json
+  commitments Json
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
