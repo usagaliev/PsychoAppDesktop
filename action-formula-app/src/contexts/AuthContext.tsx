@@ -59,6 +59,7 @@ export const AuthProvider = ({ children }: Props) => {
       const response = await loginWithGoogle({ idToken: credential })
       setUser(response.user)
       setAuthError(null)
+      await fetchProfile()
     } catch (error) {
       console.error('Google auth failed', error)
       setAuthError('Не удалось выполнить вход через Google. Попробуйте снова.')
