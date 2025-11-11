@@ -5,7 +5,6 @@ import {
   loginWithGoogle,
   logout as logoutRequest,
   type AuthenticatedUser,
-  type LoginResponse,
 } from '../services/auth'
 import { ApiError } from '../services/http'
 
