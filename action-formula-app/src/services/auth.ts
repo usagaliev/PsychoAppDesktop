@@ -39,3 +39,8 @@ export const logout = () =>
     method: 'POST',
   })
 
+export const devLogin = () =>
+  http<LoginResponse>('/auth/dev-login', {
+    method: 'POST',
+  })
+

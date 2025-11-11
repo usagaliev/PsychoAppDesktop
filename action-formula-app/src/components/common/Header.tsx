@@ -12,7 +12,7 @@ const navLinks = [
 ]
 
 export const Header = () => {
-  const { user, loginWithCredential, logout, loading } = useAuth()
+  const { user, loginWithCredential, loginWithDevMock, logout, loading } = useAuth()
 
   return (
     <header className="app-header">
@@ -58,16 +58,27 @@ export const Header = () => {
           ) : loading ? (
             <span className="auth-loading">Подключаем профиль...</span>
           ) : (
-            <GoogleLogin
-              shape="pill"
-              theme="outline"
-              size="medium"
-              onSuccess={(credentialResponse) => {
-                if (credentialResponse.credential) {
-                  void loginWithCredential(credentialResponse.credential)
-                }
-              }}
-            />
+            <div className="auth-actions">
+              <GoogleLogin
+                shape="pill"
+                theme="outline"
+                size="medium"
+                onSuccess={(credentialResponse) => {
+                  if (credentialResponse.credential) {
+                    void loginWithCredential(credentialResponse.credential)
+                  }
+                }}
+              />
+              {loginWithDevMock && (
+                <button
+                  type="button"
+                  className="ghost-button ghost-button--muted"
+                  onClick={() => void loginWithDevMock()}
+                >
+                  Dev Login
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

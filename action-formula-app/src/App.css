@@ -74,6 +74,12 @@
   flex: 0 0 auto;
 }
 
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .auth-loading {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -126,6 +132,15 @@
 
 .ghost-button:hover {
   text-decoration: underline;
+}
+
+.ghost-button--muted {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.ghost-button--muted:hover {
+  color: var(--color-primary);
 }
 
 .app-main {
@@ -519,6 +534,186 @@
   color: var(--color-primary);
 }
 
+.daily-checkin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.daily-checkin__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.daily-checkin__streak {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(91, 108, 240, 0.08);
+}
+
+.daily-checkin__micro-actions-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daily-checkin__micro-actions-list label {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: rgba(28, 33, 64, 0.05);
+}
+
+.daily-checkin__micro-actions-list input[type='checkbox'] {
+  margin-top: 4px;
+  transform: scale(1.1);
+}
+
+.daily-checkin__micro-action-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+
+.daily-checkin__micro-action-body span {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.micro-action-remove {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.micro-action-remove:hover {
+  color: var(--color-danger, #d14343);
+}
+
+.daily-checkin__micro-actions-form {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.daily-checkin__micro-actions-form input {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: var(--font-size-base);
+}
+
+.daily-checkin__micro-actions-form input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(91, 108, 240, 0.18);
+}
+
+.suggestion-card {
+  background: linear-gradient(180deg, rgba(28, 33, 64, 0.04) 0%, rgba(28, 33, 64, 0.02) 100%);
+}
+
+.suggestion-card--warning {
+  background: rgba(241, 94, 80, 0.08);
+}
+
+.suggestion-card--positive {
+  background: rgba(47, 177, 120, 0.12);
+}
+
+.daily-checkin__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daily-checkin__form textarea {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  padding: 14px 16px;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+  resize: vertical;
+  min-height: 160px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.daily-checkin__form textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(91, 108, 240, 0.18);
+}
+
+.daily-checkin__actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+  gap: 8px;
+}
+
+.calendar-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px 0;
+  border-radius: var(--radius-sm);
+  background: rgba(28, 33, 64, 0.05);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.calendar-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-cell--done {
+  background: rgba(47, 177, 120, 0.18);
+  color: var(--color-text);
+}
+
+.calendar-cell--pending {
+  background: rgba(91, 108, 240, 0.12);
+}
+
+.calendar-cell--today {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: 2px;
+}
+
+.insight-section {
+  margin-top: 32px;
+  padding: 20px;
+  border-radius: var(--radius-md);
+  background: rgba(249, 115, 171, 0.12);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  align-items: center;
+}
+
 .chip--active {
   background: var(--color-primary);
   border-color: var(--color-primary);
@@ -564,6 +759,11 @@
 
   .hero__title {
     font-size: 2rem;
+  }
+
+  .daily-checkin {
+    grid-template-columns: 1fr;
+    gap: 24px;
   }
 }
 

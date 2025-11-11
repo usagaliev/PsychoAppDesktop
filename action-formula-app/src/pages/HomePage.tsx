@@ -1,99 +1,97 @@
 import { motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 import { SignInPrompt } from '../components/common/SignInPrompt'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchDiagnostics, type DiagnosticsResult } from '../services/diagnostics'
+import {
+  fetchCurrentGoal,
+  logGoalDay,
+  createMicroAction,
+  deleteMicroAction,
+  type GoalSnapshot,
+} from '../services/goals'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { buildRevealMotion } from '../utils/motion'
 
 type RevealOptions = Parameters<typeof buildRevealMotion>[1]
 
-const formulaCards = [
-  {
-    id: 'value',
-    title: 'Ценность награды',
-    description:
-      'Верните контакт с настоящим «зачем». Используйте метод «5 зачем», эпитафию и визуализацию будущего, чтобы усилить внутреннюю мотивацию.',
-  },
-  {
-    id: 'plan',
-    title: 'Вера в план',
-    description:
-      'Декомпозируйте цель, соберите рабочие методы, составьте план исследования. Чем конкретнее шаги — тем выше доверие к плану.',
-  },
-  {
-    id: 'self',
-    title: 'Вера в себя',
-    description:
-      'Опирайтесь на прошлые успехи, ищите поддержку, создавайте «протезы саморегуляции» и начинайте с действий, в которые уже можете поверить.',
-  },
-]
-
-const quickActions = [
-  {
-    title: 'Шаг 1. Обновить ценность',
-    items: ['Выберите цель, которая волнует именно вас', 'Ответьте на 3–5 вопросов из чек-листа ценностей', 'Зафиксируйте ключевые инсайты в журнале'],
-  },
-  {
-    title: 'Шаг 2. Уточнить план',
-    items: ['Декомпозируйте цель на этапы', 'Определите ресурсы и возможные препятствия', 'Запланируйте первое действие на ближайшие 24 часа'],
-  },
-  {
-    title: 'Шаг 3. Поддержать веру в себя',
-    items: ['Выберите человека или сервис для внешней поддержки', 'Настройте напоминания и отчётность', 'Празднуйте каждый маленький прогресс'],
-  },
-]
-
-const readinessChecklist = [
-  'Я спал(а) не меньше 6–7 часов и чувствую базовую энергию',
-  'Мне безопасно проходить упражнения без риска ухудшения состояния',
-  'Я готов(а) при необходимости обратиться за помощью к специалисту',
-]
-
-const riskSignals = [
-  'тяжёлое выгорание, эпизоды депрессии или тревожные расстройства',
-  'диагностированное СДВГ без поддержки специалиста',
-  'острые соматические состояния, из-за которых сложно выполнять план',
-]
-
 const theoryHighlights = [
   {
     title: 'Джулиан Роттер — поведенческий потенциал',
-    description: 'Действие запускается только если одновременно высокая ценность награды и вера в успех. Обнуление одного фактора гасит мотивацию.',
+    description: 'Действие запускается, когда ценность награды и вера в успех одновременно высоки. Обнуляется один — обнуляется всё.',
   },
   {
     title: 'Альберт Бандура — самоэффективность',
-    description: 'Нужно верить и в сам план, и в собственную способность его выполнить. Отдельно поддерживаем оба этих источника уверенности.',
+    description: 'Нужно верить и в план, и в себя. Работаем с двумя “источниками уверенности” параллельно.',
   },
   {
-    title: 'Виктор Врум — ожидания и валентность',
-    description: 'Проверяем: приведёт ли результат к желаемой награде и насколько лично она для вас ценна.',
+    title: 'Виктор Врум — ожидания',
+    description: 'Проверяем: приведут ли усилия к результату и действительно ли награда для вас важна.',
   },
 ]
 
-const componentToFocus: Record<DiagnosticsResult['weakestComponent'], string> = {
+const focusLabel: Record<DiagnosticsResult['weakestComponent'], string> = {
+  VALUE: 'Ценность награды',
+  PLAN: 'Вера в план',
+  SELF: 'Вера в себя',
+}
+
+const focusQuery: Record<DiagnosticsResult['weakestComponent'], string> = {
   VALUE: 'value',
   PLAN: 'plan',
   SELF: 'self',
 }
 
-const componentLabel = (component: DiagnosticsResult['weakestComponent']) => {
-  switch (component) {
-    case 'PLAN':
-      return 'Вера в план'
-    case 'SELF':
-      return 'Вера в себя'
-    default:
-      return 'Ценность награды'
-  }
+const formatDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString() : '—')
+
+const formatCalendarTitle = (entry: GoalSnapshot['tracking']['calendar'][number]) =>
+  entry.completed
+    ? `Выполнено · ${formatDate(entry.date)}${entry.reflection ? `\n${entry.reflection}` : ''}`
+    : `Без отметки · ${formatDate(entry.date)}`
+
+type DailyMicroActionState = {
+  id: string
+  title: string
+  description: string | null
+  completedToday: boolean
+}
+
+const normalizeDate = (value: Date) => {
+  const result = new Date(value)
+  result.setHours(0, 0, 0, 0)
+  return result
+}
+
+const differenceInDays = (a: Date, b: Date) =>
+  Math.round((normalizeDate(a).getTime() - normalizeDate(b).getTime()) / (24 * 60 * 60 * 1000))
+
+type SuggestionTone = 'default' | 'warning' | 'positive'
+
+type Suggestion = {
+  id: string
+  title: string
+  description: string
+  cta: { label: string; to: string }
+  tone?: SuggestionTone
 }
 
 export const HomePage = () => {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult[]>([])
   const [isLoadingDiagnostics, setIsLoadingDiagnostics] = useState(true)
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null)
+
+  const [goalSnapshot, setGoalSnapshot] = useState<GoalSnapshot | null>(null)
+  const [goalLoading, setGoalLoading] = useState(true)
+  const [goalError, setGoalError] = useState<string | null>(null)
+  const [reflectionDraft, setReflectionDraft] = useState('')
+  const [microActionsState, setMicroActionsState] = useState<DailyMicroActionState[]>([])
+  const [microActionDraftTitle, setMicroActionDraftTitle] = useState('')
+  const [microActionDraftDescription, setMicroActionDraftDescription] = useState('')
+  const [isSavingDay, setIsSavingDay] = useState(false)
+  const [isCreatingMicroAction, setIsCreatingMicroAction] = useState(false)
+
   const { user, loading: authLoading } = useAuth()
   const prefersReducedMotion = usePrefersReducedMotion()
 
@@ -126,6 +124,50 @@ export const HomePage = () => {
 
     void loadDiagnostics()
   }, [user])
+
+  useEffect(() => {
+    const loadGoal = async () => {
+      if (!user) {
+        setGoalSnapshot(null)
+        setGoalError(null)
+        setGoalLoading(false)
+        return
+      }
+
+      try {
+        setGoalLoading(true)
+        const response = await fetchCurrentGoal()
+        setGoalSnapshot(response.item ?? null)
+        setGoalError(null)
+      } catch (error) {
+        console.error('Failed to load goal snapshot', error)
+        setGoalError('Не удалось загрузить текущую цель. Попробуйте позже.')
+      } finally {
+        setGoalLoading(false)
+      }
+    }
+
+    void loadGoal()
+  }, [user])
+
+  useEffect(() => {
+    if (!goalSnapshot) {
+      setReflectionDraft('')
+      setMicroActionsState([])
+      return
+    }
+
+    const todayEntry = goalSnapshot.tracking.calendar.at(-1)
+    setReflectionDraft(todayEntry?.reflection ?? '')
+    setMicroActionsState(
+      goalSnapshot.tracking.microActions.map((action) => ({
+        id: action.id,
+        title: action.title,
+        description: action.description,
+        completedToday: action.completedToday,
+      })),
+    )
+  }, [goalSnapshot])
 
   const { latestDiagnostics, insights } = useMemo(() => {
     if (diagnostics.length === 0) {
@@ -165,324 +207,565 @@ export const HomePage = () => {
     }
   }, [diagnostics])
 
+  const todayEntry = goalSnapshot?.tracking.calendar.at(-1)
+  const isTodayCompleted = todayEntry?.completed ?? false
+  const streakSummary = goalSnapshot
+    ? {
+        current: goalSnapshot.tracking.currentStreak,
+        best: goalSnapshot.tracking.longestStreak,
+        completionRate: goalSnapshot.tracking.completionRate,
+        totalDays: goalSnapshot.tracking.totalDays,
+        completedDays: goalSnapshot.tracking.completedDays,
+      }
+    : null
+
+  const suggestions = useMemo(() => {
+    const items: Suggestion[] = []
+    const today = normalizeDate(new Date())
+
+    if (!goalSnapshot) {
+      if (user && diagnostics.length > 0) {
+        items.push({
+          id: 'create-goal',
+          title: 'Задайте цель после диагностики',
+          description:
+            'Диагностика уже пройдена — выберите цель по формуле, чтобы мы построили календарь и персональные подсказки.',
+          cta: { label: 'Создать цель', to: '/diagnostics' },
+          tone: 'positive',
+        })
+      }
+      return items
+    }
+
+    const lastCompletedAt = goalSnapshot.tracking.lastCompletedAt
+      ? new Date(goalSnapshot.tracking.lastCompletedAt)
+      : null
+    const daysSinceLastCompletion =
+      lastCompletedAt !== null ? differenceInDays(today, lastCompletedAt) : Infinity
+
+    if (!isTodayCompleted && daysSinceLastCompletion >= 2) {
+      items.push({
+        id: 'return-to-ritual',
+        title: 'Вернитесь в ритм через короткое упражнение',
+        description:
+          'Последняя отметка была несколько дней назад. Попробуйте мягкое упражнение, чтобы снова включить исполнительные функции.',
+        cta: { label: 'Открыть упражнения', to: '/exercises?focus=plan' },
+        tone: 'warning',
+      })
+    }
+
+    if (goalSnapshot.tracking.microActions.length === 0) {
+      items.push({
+        id: 'add-micro-action',
+        title: 'Добавьте микро-действие на автомате',
+        description:
+          'Микро-действие — маленький шаг, который запускает большую цель. Пусть это будет действие на 1–2 минуты.',
+        cta: { label: 'Добавить микро-действие', to: '#micro-actions' },
+      })
+    }
+
+    if (goalSnapshot.tracking.completionRate < 60 && goalSnapshot.tracking.totalDays >= 5) {
+      items.push({
+        id: 'review-support',
+        title: 'Проверьте систему поддержки',
+        description:
+          'Выполнение держится ниже 60%. Время усилить внешние опоры: договорённости, напоминания, партнёра по отчётности.',
+        cta: { label: 'Настроить поддержку', to: '/support' },
+        tone: 'warning',
+      })
+    }
+
+    if (insights) {
+      items.push({
+        id: `focus-${insights.dominantWeakest}`,
+        title: `Укрепите компонент «${focusLabel[insights.dominantWeakest]}»`,
+        description:
+          'Этот компонент чаще всего проседает в диагностике. Выберите упражнение, чтобы подтянуть слабое звено формулы.',
+        cta: {
+          label: 'Перейти к упражнениям',
+          to: `/exercises?focus=${focusQuery[insights.dominantWeakest]}`,
+        },
+        tone: 'positive',
+      })
+
+      if (insights.trend !== null && insights.trend < 0) {
+        items.push({
+          id: 'negative-trend',
+          title: 'Зафиксируйте контекст в журнале',
+          description:
+            'Индекс действия снизился. Запишите, что изменилось в условиях и настроении — это поможет скорректировать план.',
+          cta: { label: 'Открыть журнал', to: '/journal' },
+        })
+      }
+    }
+
+    return items
+  }, [diagnostics.length, goalSnapshot, insights, isTodayCompleted, user])
+
+  const buildMicroActionsPayload = () =>
+    microActionsState.length > 0
+      ? microActionsState.map((action) => ({
+          id: action.id,
+          completed: action.completedToday,
+        }))
+      : undefined
+
+  const handleCompleteToday = async () => {
+    if (!goalSnapshot) return
+    try {
+      setIsSavingDay(true)
+      const response = await logGoalDay(goalSnapshot.goal.id, {
+        completed: true,
+        reflection: reflectionDraft.trim().length > 0 ? reflectionDraft.trim() : undefined,
+        microActions: buildMicroActionsPayload(),
+        journalEntry:
+          reflectionDraft.trim().length > 0
+            ? {
+                title: `День ${goalSnapshot.tracking.totalDays} — ${goalSnapshot.goal.title}`,
+                content: reflectionDraft.trim(),
+                templateKey: 'daily-reflection',
+              }
+            : undefined,
+      })
+      setGoalSnapshot(response.item ?? null)
+      setGoalError(null)
+    } catch (error) {
+      console.error('Failed to update day log', error)
+      setGoalError('Не получилось сохранить прогресс. Попробуйте ещё раз.')
+    } finally {
+      setIsSavingDay(false)
+    }
+  }
+
+  const handleUndoToday = async () => {
+    if (!goalSnapshot) return
+    try {
+      setIsSavingDay(true)
+      setMicroActionsState((prev) => prev.map((action) => ({ ...action, completedToday: false })))
+      const response = await logGoalDay(goalSnapshot.goal.id, {
+        completed: false,
+        reflection: reflectionDraft.trim().length > 0 ? reflectionDraft.trim() : undefined,
+        microActions:
+          microActionsState.length > 0
+            ? microActionsState.map((action) => ({ id: action.id, completed: false }))
+            : undefined,
+      })
+      setGoalSnapshot(response.item ?? null)
+      setGoalError(null)
+    } catch (error) {
+      console.error('Failed to revert day log', error)
+      setGoalError('Не получилось обновить отметку. Попробуйте позже.')
+    } finally {
+      setIsSavingDay(false)
+    }
+  }
+
+  const handleToggleMicroAction = (id: string) => {
+    setMicroActionsState((prev) =>
+      prev.map((action) =>
+        action.id === id ? { ...action, completedToday: !action.completedToday } : action,
+      ),
+    )
+  }
+
+  const handleCreateMicroAction = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!goalSnapshot) return
+    if (!microActionDraftTitle.trim()) return
+
+    try {
+      setIsCreatingMicroAction(true)
+      const response = await createMicroAction(goalSnapshot.goal.id, {
+        title: microActionDraftTitle.trim(),
+        description: microActionDraftDescription.trim() || undefined,
+      })
+      setGoalSnapshot(response.item ?? null)
+      setGoalError(null)
+      setMicroActionDraftTitle('')
+      setMicroActionDraftDescription('')
+    } catch (error) {
+      console.error('Failed to create micro action', error)
+      setGoalError('Не удалось добавить микро-действие. Попробуйте позже.')
+    } finally {
+      setIsCreatingMicroAction(false)
+    }
+  }
+
+  const handleDeleteMicroAction = async (microActionId: string) => {
+    if (!goalSnapshot) return
+    try {
+      const response = await deleteMicroAction(microActionId)
+      setGoalSnapshot(response.item ?? null)
+      setGoalError(null)
+    } catch (error) {
+      console.error('Failed to delete micro action', error)
+      setGoalError('Не удалось удалить микро-действие. Попробуйте позже.')
+    }
+  }
+
   return (
     <div className="container" id="materials">
       <motion.section className="section hero" {...reveal(0, { distance: 40, once: true })}>
         <motion.div className="hero__content" {...reveal(0.05, { distance: 28, once: true })}>
-          <span className="card__tag">Формула действия</span>
-          <h1 className="hero__title">Превратите знание в устойчивое действие</h1>
+          <span className="card__tag">Личный кабинет</span>
+          <h1 className="hero__title">
+            {goalSnapshot
+              ? `Цель: ${goalSnapshot.goal.title}`
+              : 'Превратите знание в устойчивое действие'}
+          </h1>
           <p className="hero__subtitle">
-            Структурированная система, основанная на работах Роттера, Врума и Бандуры. Усильте ценность, уточните план и поддержите
-            веру в себя — действие станет неизбежным.
+            {goalLoading
+              ? 'Обновляем прогресс...'
+              : 'Диагностика подсказывает слабое звено формулы, календарь фиксирует микро‑шаги, а журнал сохраняет инсайты.'}
           </p>
-          <div className="hero__actions">
-            <Link to="/diagnostics" className="cta-button">
-              Пройти диагностику
-            </Link>
-            <Link to="/exercises" className="cta-button cta-button--ghost">
-              Посмотреть упражнения
-            </Link>
-          </div>
+          {user ? (
+            <div className="hero__actions">
+              <Link to="/diagnostics" className="cta-button">
+                Обновить диагностику
+              </Link>
+              <Link to="/journal" className="cta-button cta-button--ghost">
+                Открыть журнал
+              </Link>
+            </div>
+          ) : (
+            <div style={{ marginTop: '16px' }}>
+              <SignInPrompt
+                title="Войдите, чтобы сохранить прогресс"
+                description="После диагностики автоматически создадим цель, календарь и личный журнал."
+              />
+            </div>
+          )}
         </motion.div>
         <motion.div className="hero__visual" {...reveal(0.12, { distance: 24, once: true })}>
           <div className="hero__visual-content">
-            <h3 className="section-heading" style={{ margin: 0 }}>Формула</h3>
-            <p className="section-subtitle" style={{ margin: 0 }}>
-              Вероятность действия = Ценность × Вера в план × Вера в себя
-            </p>
-            <div className="metrics-bar" style={{ marginTop: '16px' }}>
+            <h3 className="section-heading" style={{ margin: 0 }}>Быстрый обзор</h3>
+            <div className="metrics-bar" style={{ marginTop: '8px' }}>
               <div className="metric">
-                <span className="metric__label">{user ? 'Текущая цель' : 'Цель'}</span>
-                <p className="metric__value">
-                  {user && insights ? insights.latest.goalSummary : 'Личная эффективность'}
-                </p>
+                <span className="metric__label">Старт</span>
+                <p className="metric__value">{formatDate(goalSnapshot?.tracking.startDate)}</p>
               </div>
               <div className="metric">
-                <span className="metric__label">{user ? 'Средний индекс действия' : 'Прогресс'}</span>
+                <span className="metric__label">Последняя отметка</span>
+                <p className="metric__value">{formatDate(goalSnapshot?.tracking.lastCompletedAt)}</p>
+              </div>
+              <div className="metric">
+                <span className="metric__label">Streak</span>
                 <p className="metric__value">
-                  {user && insights ? `${insights.avgIndex}%` : '+32%'}
+                  {streakSummary ? `${streakSummary.current} дн.` : user ? '0 дн.' : '—'}
                 </p>
               </div>
             </div>
             <p className="section-subtitle" style={{ marginTop: '16px' }}>
-              Проведите диагностику и узнайте, какой компонент формулы проседает именно у вас.
+              {goalSnapshot
+                ? 'Продолжайте отмечать дни и пополнять журнал — streak растёт, вера в себя усиливается.'
+                : 'Пройдите диагностику, чтобы мы создали первую цель и расписание шагов.'}
             </p>
           </div>
         </motion.div>
       </motion.section>
 
-      <motion.section
-        className="section surface-panel surface-panel--accent"
-        id="readiness"
-        {...reveal(0.18, { distance: 24 })}
-      >
-        <motion.div style={{ display: 'grid', gap: '24px' }} {...reveal(0.2, { distance: 16 })}>
-          <motion.div {...reveal(0.22, { distance: 12 })}>
-            <h2 className="section-heading" style={{ marginBottom: '8px' }}>
-              Сначала проверьте ресурсное состояние
-            </h2>
-            <p className="section-subtitle" style={{ marginBottom: 0 }}>
-              Формула работает мягко, но не заменяет терапию. Если вы в сложном состоянии, добавьте больше поддержки из списка ниже.
-            </p>
-          </motion.div>
-          <div className="card-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-            <motion.article
-              className="card"
-              style={{ boxShadow: 'none', background: 'var(--color-surface)' }}
-              {...reveal(0.24, { distance: 18 })}
-              whileHover={hoverLift}
-            >
-              <h3 className="card__title" style={{ marginBottom: '12px' }}>Мини-чек-лист готовности</h3>
-              <ul style={{ color: 'var(--color-text-secondary)', paddingInlineStart: '18px', margin: 0, display: 'grid', gap: '8px' }}>
-                {readinessChecklist.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </motion.article>
-            <motion.article
-              className="card"
-              style={{ boxShadow: 'none', background: 'var(--color-surface)' }}
-              {...reveal(0.28, { distance: 18 })}
-              whileHover={hoverLift}
-            >
-              <h3 className="card__title" style={{ marginBottom: '12px' }}>Когда лучше обратиться к специалисту</h3>
-              <ul style={{ color: 'var(--color-text-secondary)', paddingInlineStart: '18px', margin: 0, display: 'grid', gap: '8px' }}>
-                {riskSignals.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              <p className="section-subtitle" style={{ marginTop: '16px', color: 'var(--color-text-secondary)' }}>
-                Нагрузка на исполнительные функции — важная часть лекции Алмары Кулеевой. Если распознаёте себя — начните с внешней поддержки.
-              </p>
-            </motion.article>
-          </div>
-        </motion.div>
-      </motion.section>
+      {goalError && (
+        <motion.section className="section surface-panel surface-panel--accent" {...reveal(0.14, { distance: 16 })}>
+          <p className="section-subtitle" style={{ color: '#d14343', margin: 0 }}>{goalError}</p>
+        </motion.section>
+      )}
 
-      <motion.section className="section" id="checklists" {...reveal(0.32, { distance: 24 })}>
-        <motion.h2 className="section-heading" {...reveal(0.34, { distance: 12 })}>
-          Три компонента, которые двигают вперёд
-        </motion.h2>
-        <motion.p className="section-subtitle" {...reveal(0.36, { distance: 12 })}>
-          Собрали лучшие упражнения и чек-листы для каждой части формулы.
-        </motion.p>
-        <div className="card-grid">
-          {formulaCards.map((card, index) => (
-            <motion.article
-              key={card.id}
-              className="card"
-              {...reveal(0.38 + index * 0.06, { distance: 18 })}
-              whileHover={hoverLift}
-            >
-              <span className="card__tag">Компонент</span>
-              <h3 className="card__title">{card.title}</h3>
-              <p className="card__description">{card.description}</p>
-              <Link to={`/exercises?focus=${card.id}`} className="cta-button cta-button--ghost" style={{ alignSelf: 'flex-start' }}>
-                Перейти к упражнениям
-              </Link>
-            </motion.article>
-          ))}
-        </div>
-      </motion.section>
-
-      <motion.section
-        className="section surface-panel surface-panel--accent"
-        id="exercises"
-        {...reveal(0.44, { distance: 24 })}
-      >
-        <motion.h2 className="section-heading" {...reveal(0.46, { distance: 12 })}>
-          Как начать уже сегодня
-        </motion.h2>
-        <motion.p className="section-subtitle" {...reveal(0.48, { distance: 12 })}>
-          Пройдите три коротких шага и задайте направление изменениям.
-        </motion.p>
-        <div className="card-grid">
-          {quickActions.map((block, index) => (
-            <motion.div
-              key={block.title}
-              className="card"
-              style={{ boxShadow: 'none', background: 'transparent' }}
-              {...reveal(0.5 + index * 0.06, { distance: 16 })}
-            >
-              <h3 className="card__title">{block.title}</h3>
-              <ul>
-                {block.items.map((item) => (
-                  <li key={item} style={{ color: 'var(--color-text-secondary)' }}>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          ))}
-        </div>
-      </motion.section>
-
-      <motion.section className="section surface-panel" id="diagnostics-history" {...reveal(0.56, { distance: 24 })}>
-        <motion.div
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}
-          {...reveal(0.58, { distance: 12 })}
-        >
-          <div>
-            <h2 className="section-heading">Последние результаты диагностики</h2>
-            <p className="section-subtitle" style={{ marginBottom: 0 }}>
-              Отслеживайте динамику формулы, чтобы понимать, какой компонент проседает чаще всего.
-            </p>
-          </div>
-          <Link to="/diagnostics" className="cta-button cta-button--ghost">
-            Перейти к диагностике
-          </Link>
-        </motion.div>
-
-        {authLoading ? (
-          <motion.p className="section-subtitle" style={{ marginTop: '24px' }} {...reveal(0.6, { distance: 10 })}>
-            Проверяем ваш профиль...
-          </motion.p>
-        ) : !user ? (
-          <motion.div style={{ marginTop: '24px' }} {...reveal(0.6, { distance: 10 })}>
-            <SignInPrompt
-              title="Сохраните свои результаты в личном кабинете"
-              description="Войдите через Google, и мы сохраним историю диагностик, журнал и план поддержки."
-            />
-          </motion.div>
-        ) : isLoadingDiagnostics ? (
-          <motion.p className="section-subtitle" style={{ marginTop: '24px' }} {...reveal(0.6, { distance: 10 })}>
-            Загружаем последние результаты...
-          </motion.p>
-        ) : diagnosticsError ? (
-          <motion.p
-            className="section-subtitle"
-            style={{ color: '#d14343', marginTop: '24px' }}
-            {...reveal(0.6, { distance: 10 })}
-          >
-            {diagnosticsError}
-          </motion.p>
-        ) : latestDiagnostics.length === 0 ? (
-          <motion.p className="section-subtitle" style={{ marginTop: '24px' }} {...reveal(0.6, { distance: 10 })}>
-            Пока нет сохранённых диагностик. Пройдите оценку и сохраните результат, чтобы отслеживать прогресс.
-          </motion.p>
-        ) : (
-          <div className="card-grid" style={{ marginTop: '24px' }}>
-            {latestDiagnostics.map((item, index) => (
-              <motion.article
-                key={item.id}
-                className="card"
-                {...reveal(0.62 + index * 0.05, { distance: 18 })}
-                whileHover={hoverLift}
-              >
-                <span className="card__tag">{new Date(item.createdAt).toLocaleDateString()}</span>
-                <h3 className="card__title">{item.goalSummary}</h3>
-                <p className="card__description">Индекс действия: {item.motivationIndex}%</p>
-                <p className="card__description">
-                  Ценность — {item.valueScore}/10 · План — {item.planScore}/10 · Вера в себя — {item.selfScore}/10
-                </p>
-                <p className="card__description" style={{ fontWeight: 600 }}>
-                  Слабое звено: {componentLabel(item.weakestComponent)}
-                </p>
-              </motion.article>
-            ))}
-          </div>
-        )}
-      </motion.section>
-
-      {user && !authLoading && insights && (
-        <motion.section
-          className="section surface-panel surface-panel--accent"
-          id="insights"
-          {...reveal(0.7, { distance: 24 })}
-        >
-          <motion.div
-            style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}
-            {...reveal(0.72, { distance: 12 })}
-          >
-            <div>
+      {goalSnapshot && (
+        <motion.section className="section surface-panel" {...reveal(0.18, { distance: 20 })}>
+          <div className="daily-checkin">
+            <div className="daily-checkin__summary">
+              <span className="card__tag">Ежедневная отметка</span>
               <h2 className="section-heading" style={{ marginBottom: '8px' }}>
-                Ваши актуальные акценты
+                {isTodayCompleted ? 'День закрыт — отлично!' : 'Микро-цель на сегодня'}
               </h2>
-              <p className="section-subtitle" style={{ margin: 0 }}>
-                Средний индекс действия — {insights.avgIndex}%.{' '}
-                {insights.trend === null
-                  ? 'Продолжайте фиксировать результаты, чтобы увидеть динамику.'
-                  : insights.trend > 0
-                    ? `Прогресс растёт на ${insights.trend} п.п. по сравнению с прошлой оценкой.`
-                    : insights.trend < 0
-                      ? `Есть просадка на ${Math.abs(insights.trend)} п.п. Посмотрите, что изменилось во внешних условиях.`
-                      : 'Показатель держится на прежнем уровне — хорошо сохранить стабильность.'}
+              <p className="card__description">
+                Запишите одно-два предложения о том, что сработало. Даже короткая мысль усиливает самоэффективность и помогает мозгу возвращаться к действию.
               </p>
+              <div className="daily-checkin__streak">
+                <div>
+                  <span className="metric__label">Текущий streak</span>
+                  <p className="metric__value">{streakSummary?.current ?? 0} дн.</p>
+                </div>
+                <div>
+                  <span className="metric__label">Лучший streak</span>
+                  <p className="metric__value">{streakSummary?.best ?? 0} дн.</p>
+                </div>
+                <div>
+                  <span className="metric__label">Выполнено</span>
+                  <p className="metric__value">{streakSummary?.completionRate ?? 0}%</p>
+                </div>
+              </div>
+              <div className="daily-checkin__micro-actions" id="micro-actions">
+                <span className="metric__label">Микро-действия (по желанию)</span>
+                {microActionsState.length > 0 ? (
+                  <div className="daily-checkin__micro-actions-list">
+                    {microActionsState.map((action) => (
+                      <label key={action.id}>
+                        <input
+                          type="checkbox"
+                          checked={action.completedToday}
+                          onChange={() => handleToggleMicroAction(action.id)}
+                        />
+                        <div className="daily-checkin__micro-action-body">
+                          <span>{action.title}</span>
+                          {action.description && <small>{action.description}</small>}
+                          <button
+                            type="button"
+                            className="micro-action-remove"
+                            onClick={() => handleDeleteMicroAction(action.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="card__description">
+                    Добавьте один-два маленьких шага, которые поддержат вашу цель (например: «выпить стакан воды вместо кофе»).
+                  </p>
+                )}
+                <form className="daily-checkin__micro-actions-form" onSubmit={handleCreateMicroAction}>
+                  <input
+                    value={microActionDraftTitle}
+                    onChange={(event) => setMicroActionDraftTitle(event.target.value)}
+                    placeholder="Новое микро-действие"
+                    required
+                  />
+                  <input
+                    value={microActionDraftDescription}
+                    onChange={(event) => setMicroActionDraftDescription(event.target.value)}
+                    placeholder="Короткое описание (необязательно)"
+                  />
+                  <button type="submit" className="cta-button cta-button--ghost" disabled={isCreatingMicroAction}>
+                    {isCreatingMicroAction ? 'Добавляем...' : 'Добавить действие'}
+                  </button>
+                </form>
+              </div>
             </div>
-            <Link
-              to={`/exercises?focus=${componentToFocus[insights.dominantWeakest]}`}
-              className="cta-button"
-              style={{ alignSelf: 'flex-start' }}
-            >
-              Укрепить «{componentLabel(insights.dominantWeakest)}»
-            </Link>
-          </motion.div>
-
-          <div className="card-grid" style={{ marginTop: '24px' }}>
-            <motion.article className="card" {...reveal(0.74, { distance: 18 })} whileHover={hoverLift}>
-              <span className="card__tag">Следующий шаг</span>
-              <h3 className="card__title">Запишите план микро-действий</h3>
-              <p className="card__description">
-                Зафиксируйте три ближайших шага в журнале и поделитесь ими с опорой. Это помогает укрепить веру в себя,
-                даже если мотивация плавает.
-              </p>
-              <Link to="/journal" className="cta-button cta-button--ghost" style={{ alignSelf: 'flex-start' }}>
-                Перейти в журнал
-              </Link>
-            </motion.article>
-            <motion.article className="card" {...reveal(0.78, { distance: 18 })} whileHover={hoverLift}>
-              <span className="card__tag">Поддержка</span>
-              <h3 className="card__title">Обновите договорённости</h3>
-              <p className="card__description">
-                Проверьте, есть ли у вас план B на случай отката. Добавьте новые протезы саморегуляции или человека,
-                который «одолжит» уверенность.
-              </p>
-              <Link to="/support" className="cta-button cta-button--ghost" style={{ alignSelf: 'flex-start' }}>
-                Настроить поддержку
-              </Link>
-            </motion.article>
-            <motion.article className="card" {...reveal(0.82, { distance: 18 })} whileHover={hoverLift}>
-              <span className="card__tag">История</span>
-              <h3 className="card__title">Как менялась формула</h3>
-              <p className="card__description">
-                Последняя диагностика от {new Date(insights.latest.createdAt).toLocaleDateString()} · индекс{' '}
-                {insights.latest.motivationIndex}% · слабое звено — {componentLabel(insights.latest.weakestComponent)}.
-              </p>
-              {insights.previous && (
-                <p className="card__description" style={{ marginTop: '12px' }}>
-                  Предыдущий результат: {insights.previous.motivationIndex}% (
-                  {componentLabel(insights.previous.weakestComponent)}). Сравните заметки за эти две даты.
-                </p>
-              )}
-            </motion.article>
+            <div className="daily-checkin__form">
+              <label htmlFor="reflection" className="metric__label">
+                Заметка за сегодня
+              </label>
+              <textarea
+                id="reflection"
+                value={reflectionDraft}
+                onChange={(event) => setReflectionDraft(event.target.value)}
+                placeholder="Что помогло сегодня удержаться на курсе? Что хочется повторить завтра?"
+                rows={6}
+              />
+              <div className="daily-checkin__actions">
+                {isTodayCompleted ? (
+                  <button
+                    type="button"
+                    className="cta-button cta-button--ghost"
+                    onClick={handleUndoToday}
+                    disabled={isSavingDay}
+                  >
+                    {isSavingDay ? 'Обновляем...' : 'Отменить отметку'}
+                  </button>
+                ) : (
+                  <button type="button" className="cta-button" onClick={handleCompleteToday} disabled={isSavingDay}>
+                    {isSavingDay ? 'Сохраняем...' : 'Отметить день выполненным'}
+                  </button>
+                )}
+                <Link to="/journal" className="cta-button cta-button--ghost">
+                  Все заметки
+                </Link>
+              </div>
+            </div>
           </div>
         </motion.section>
       )}
 
-      <motion.section className="section surface-panel" id="science-base" {...reveal(0.86, { distance: 24 })}>
-        <motion.h2 className="section-heading" {...reveal(0.88, { distance: 12 })}>
-          Почему эта формула работает
-        </motion.h2>
-        <motion.p className="section-subtitle" {...reveal(0.9, { distance: 12 })}>
-          Мы опираемся на лекцию «Как превратить знание в действие» и исследования мотивации. Коротко про ключевые идеи и ссылки на оригинальные теории.
-        </motion.p>
+      {goalSnapshot && suggestions.length > 0 && (
+        <motion.section className="section surface-panel" {...reveal(0.22, { distance: 20 })}>
+          <h2 className="section-heading" style={{ marginBottom: '12px' }}>Рекомендации на сегодня</h2>
+          <p className="section-subtitle" style={{ marginBottom: '24px' }}>
+            Подсказки учитывают ваши последние результаты. Выберите то, что ощущается посильным сегодня.
+          </p>
+          <div className="card-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+            {suggestions.map((item, index) => (
+              <motion.article
+                key={item.id}
+                className={[
+                  'card suggestion-card',
+                  item.tone ? `suggestion-card--${item.tone}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                {...reveal(0.24 + index * 0.05, { distance: 16 })}
+                whileHover={hoverLift}
+              >
+                <span className="card__tag">Совет</span>
+                <h3 className="card__title">{item.title}</h3>
+                <p className="card__description">{item.description}</p>
+                {item.cta.to.startsWith('#') ? (
+                  <a href={item.cta.to} className="cta-button cta-button--ghost">
+                    {item.cta.label}
+                  </a>
+                ) : (
+                  <Link to={item.cta.to} className="cta-button cta-button--ghost">
+                    {item.cta.label}
+                  </Link>
+                )}
+              </motion.article>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      {goalSnapshot && (
+        <motion.section className="section surface-panel surface-panel--accent" {...reveal(0.24, { distance: 20 })}>
+          <h2 className="section-heading" style={{ marginBottom: '12px' }}>Календарь прогресса</h2>
+          <p className="section-subtitle" style={{ marginBottom: '24px' }}>
+            Кликните на день, чтобы открыть связанную заметку. Чем плотнее заполнен календарь, тем устойчивее новая привычка.
+          </p>
+          <div className="calendar-grid">
+            {goalSnapshot.tracking.calendar.map((day) => (
+              <Link
+                key={day.date}
+                to={day.journalEntryId ? `/journal#${day.journalEntryId}` : '/journal'}
+                className={[
+                  'calendar-cell',
+                  day.completed ? 'calendar-cell--done' : 'calendar-cell--pending',
+                  todayEntry?.date === day.date ? 'calendar-cell--today' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                title={formatCalendarTitle(day)}
+              >
+                <span>{new Date(day.date).getDate()}</span>
+              </Link>
+            ))}
+          </div>
+        </motion.section>
+      )}
+
+      <motion.section className="section surface-panel" {...reveal(0.32, { distance: 24 })}>
+        <h2 className="section-heading">Диагностика и аналитика</h2>
+        <p className="section-subtitle">
+          Отслеживайте, какой компонент формулы чаще всего проседает. Эти данные помогают выбирать упражнения и поддержку.
+        </p>
+
+        {authLoading ? (
+          <p className="section-subtitle">Проверяем ваш профиль...</p>
+        ) : !user ? (
+          <SignInPrompt
+            title="Войдите, чтобы сохранить диагностику"
+            description="История оценок, календарь и журнал станут доступны после авторизации."
+          />
+        ) : isLoadingDiagnostics ? (
+          <p className="section-subtitle">Загружаем последние результаты...</p>
+        ) : diagnosticsError ? (
+          <p className="section-subtitle" style={{ color: '#d14343' }}>
+            {diagnosticsError}
+          </p>
+        ) : latestDiagnostics.length === 0 ? (
+          <p className="section-subtitle">
+            Пока нет сохранённых диагностик. Пройдите оценку и сохраните результат, чтобы отслеживать прогресс.
+          </p>
+        ) : (
+          <>
+            <div className="card-grid" style={{ marginTop: '24px' }}>
+              {latestDiagnostics.map((item) => (
+                <motion.article key={item.id} className="card" whileHover={hoverLift}>
+                  <span className="card__tag">{formatDate(item.createdAt)}</span>
+                  <h3 className="card__title">{item.goalSummary}</h3>
+                  <p className="card__description">Индекс действия: {item.motivationIndex}%</p>
+                  <p className="card__description">
+                    Ценность — {item.valueScore}/10 · План — {item.planScore}/10 · Вера в себя — {item.selfScore}/10
+                  </p>
+                  <p className="card__description" style={{ fontWeight: 600 }}>
+                    Слабое звено: {focusLabel[item.weakestComponent]}
+                  </p>
+                </motion.article>
+              ))}
+            </div>
+
+            {insights && (
+              <div className="insight-section">
+                <div>
+                  <span className="metric__label">Средний индекс</span>
+                  <p className="metric__value">{insights.avgIndex}%</p>
+                </div>
+                <div>
+                  <span className="metric__label">Динамика</span>
+                  <p className="metric__value">
+                    {insights.trend === null
+                      ? 'н/д'
+                      : `${insights.trend > 0 ? '+' : ''}${insights.trend} п.п.`}
+                  </p>
+                </div>
+                <div>
+                  <span className="metric__label">Частый провал</span>
+                  <p className="metric__value">{focusLabel[insights.dominantWeakest]}</p>
+                </div>
+                <Link
+                  to={`/exercises?focus=${focusQuery[insights.dominantWeakest]}`}
+                  className="cta-button cta-button--ghost"
+                >
+                  Подобрать упражнения
+                </Link>
+              </div>
+            )}
+          </>
+        )}
+      </motion.section>
+
+      <motion.section className="section surface-panel surface-panel--accent" {...reveal(0.44, { distance: 24 })}>
+        <h2 className="section-heading">Подборка упражнений</h2>
+        <p className="section-subtitle">
+          Регулярно напоминаем о техниках, чтобы поддерживать мотивацию, план и самоэффективность.
+        </p>
         <div className="card-grid">
-          {theoryHighlights.map((item, index) => (
-            <motion.article
-              key={item.title}
-              className="card"
-              {...reveal(0.92 + index * 0.05, { distance: 18 })}
-              whileHover={hoverLift}
-            >
+          <motion.article className="card" whileHover={hoverLift}>
+            <span className="card__tag">Ценность</span>
+            <h3 className="card__title">Метод «5 зачем»</h3>
+            <p className="card__description">
+              Вернитесь к истинной мотивации. Подряд задавайте себе «зачем?» и фиксируйте отклики — это восстановит эмоциональную связь с целью.
+            </p>
+            <Link to="/exercises?focus=value" className="cta-button cta-button--ghost">
+              Начать упражнение
+            </Link>
+          </motion.article>
+          <motion.article className="card" whileHover={hoverLift}>
+            <span className="card__tag">План</span>
+            <h3 className="card__title">Декомпозиция цели</h3>
+            <p className="card__description">
+              Разбейте цель на понятные этапы, определите риски и первый шаг на 24 часа. Чем яснее план, тем выше вероятность действия.
+            </p>
+            <Link to="/exercises?focus=plan" className="cta-button cta-button--ghost">
+              Расписать шаги
+            </Link>
+          </motion.article>
+          <motion.article className="card" whileHover={hoverLift}>
+            <span className="card__tag">Вера в себя</span>
+            <h3 className="card__title">Одолженная вера</h3>
+            <p className="card__description">
+              Подключите поддержку — человека или сообщество. Обсудите формат отчётности, чтобы удерживать фокус и не срываться.
+            </p>
+            <Link to="/support" className="cta-button cta-button--ghost">
+              Настроить поддержку
+            </Link>
+          </motion.article>
+        </div>
+      </motion.section>
+
+      <motion.section className="section surface-panel" {...reveal(0.56, { distance: 24 })}>
+        <h2 className="section-heading">Почему это работает</h2>
+        <p className="section-subtitle">
+          Приложение собрано на основе лекции «Как превратить знание в действие» и исследований мотивации. Вот короткие справки по ключевым теориям.
+        </p>
+        <div className="card-grid">
+          {theoryHighlights.map((item) => (
+            <motion.article key={item.title} className="card" whileHover={hoverLift}>
               <span className="card__tag">Теория</span>
               <h3 className="card__title">{item.title}</h3>
               <p className="card__description">{item.description}</p>
             </motion.article>
           ))}
         </div>
-        <motion.p className="section-subtitle" style={{ marginTop: '24px' }} {...reveal(1.02, { distance: 12 })}>
-          Хотите глубже? Откройте конспект лекции и блоки упражнений в разделе «Материалы» — вы найдёте цитаты, вопросы и шаблоны прямо из выступления.
-        </motion.p>
       </motion.section>
     </div>
   )

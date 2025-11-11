@@ -4,15 +4,18 @@ import {
   fetchCurrentUser,
   loginWithGoogle,
   logout as logoutRequest,
+  devLogin,
   type AuthenticatedUser,
 } from '../services/auth'
 import { ApiError } from '../services/http'
+import { env } from '../config/env'
 
 type AuthContextValue = {
   user: AuthenticatedUser | null
   loading: boolean
   authError: string | null
   loginWithCredential: (credential: string) => Promise<void>
+  loginWithDevMock?: () => Promise<void>
   logout: () => Promise<void>
   refreshProfile: () => Promise<void>
   token: string | null
@@ -81,13 +84,37 @@ export const AuthProvider = ({ children }: Props) => {
     }
   }, [])
 
+  const loginWithDevMock = useCallback(async () => {
+    if (!env.enableDevMockAuth) {
+      throw new Error('Dev mock auth is disabled')
+    }
+
+    try {
+      setLoading(true)
+      const response = await devLogin()
+      setUser(response.user)
+      setToken(response.token)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(STORAGE_KEY, response.token)
+      }
+      setAuthError(null)
+      await fetchProfile()
+    } catch (error) {
+      console.error('Dev mock auth failed', error)
+      setAuthError('Не удалось выполнить dev-вход. Проверьте конфигурацию.')
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchProfile])
+
   const logout = useCallback(async () => {
     try {
       await logoutRequest()
     } finally {
       setUser(null)
       setAuthError(null)
-       setToken(null)
+      setToken(null)
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(STORAGE_KEY)
       }
@@ -100,11 +127,21 @@ export const AuthProvider = ({ children }: Props) => {
       loading,
       authError,
       loginWithCredential,
+      loginWithDevMock: env.enableDevMockAuth ? loginWithDevMock : undefined,
       logout,
       refreshProfile: fetchProfile,
       token,
     }),
-    [authError, fetchProfile, loading, loginWithCredential, logout, token, user],
+    [
+      authError,
+      fetchProfile,
+      loading,
+      loginWithCredential,
+      loginWithDevMock,
+      logout,
+      token,
+      user,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

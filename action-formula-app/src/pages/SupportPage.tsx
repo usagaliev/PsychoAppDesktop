@@ -159,7 +159,7 @@ export const SupportPage = () => {
           удерживать внимание на цели.
         </motion.p>
         <motion.p className="card__description" style={{ marginBottom: '24px' }} {...reveal(0.06, { distance: 10 })}>
-          В лекции Алмара подчеркивает: вера в себя растёт быстрее, когда мы опираемся на людей и механизмы, которые уже доказали свою эффективность.
+          Специалисты подчеркивают: вера в себя растёт быстрее, когда мы опираемся на людей и механизмы, которые уже доказали свою эффективность.
         </motion.p>
         {isLoading && (
           <motion.p className="section-subtitle" {...reveal(0.08, { distance: 10 })}>

@@ -27,18 +27,19 @@ enum FormulaComponent {
 }
 
 model User {
-  id         String   @id @default(cuid())
-  googleId   String   @unique
-  email      String   @unique
-  name       String?
-  avatarUrl  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  googleId  String   @unique
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  goals         Goal[]
-  diagnostics   DiagnosticsResult[]
-  journal       JournalEntry[]
-  supportPlan   SupportPlan?
+  goals        Goal[]
+  diagnostics  DiagnosticsResult[]
+  journal      JournalEntry[]
+  supportPlan  SupportPlan?
+  goalTracking GoalTracking[]
 }
 
 model Goal {
@@ -53,24 +54,25 @@ model Goal {
   updatedAt   DateTime   @updatedAt
 
   diagnostics DiagnosticsResult[]
+  tracking    GoalTracking?
 
   @@index([userId])
 }
 
 model DiagnosticsResult {
-  id               String            @id @default(cuid())
+  id               String           @id @default(cuid())
   userId           String
-  user             User              @relation(fields: [userId], references: [id])
+  user             User             @relation(fields: [userId], references: [id])
   goalId           String?
-  goal             Goal?             @relation(fields: [goalId], references: [id])
+  goal             Goal?            @relation(fields: [goalId], references: [id])
   goalSummary      String
   valueScore       Int
   planScore        Int
   selfScore        Int
   motivationIndex  Int
   weakestComponent FormulaComponent
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @default(now()) @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @default(now()) @updatedAt
 
   @@index([userId])
   @@index([goalId])
@@ -86,6 +88,8 @@ model JournalEntry {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  goalDayLog GoalDayLog? @relation("JournalEntryDayLog")
+
   @@index([userId, createdAt])
 }
 
@@ -98,4 +102,68 @@ model SupportPlan {
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model GoalTracking {
+  id              String    @id @default(cuid())
+  goalId          String    @unique
+  goal            Goal      @relation(fields: [goalId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  startDate       DateTime  @default(now())
+  timezone        String    @default("UTC")
+  currentStreak   Int       @default(0)
+  longestStreak   Int       @default(0)
+  lastCompletedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  dayLogs      GoalDayLog[]
+  microActions MicroAction[]
+
+  @@index([userId])
+}
+
+model GoalDayLog {
+  id             String        @id @default(cuid())
+  trackingId     String
+  tracking       GoalTracking  @relation(fields: [trackingId], references: [id])
+  date           DateTime
+  completed      Boolean       @default(false)
+  reflection     String?
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation("JournalEntryDayLog", fields: [journalEntryId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  microActionCompletions MicroActionCompletion[]
+
+  @@unique([trackingId, date])
+}
+
+model MicroAction {
+  id             String       @id @default(cuid())
+  goalTrackingId String
+  tracking       GoalTracking @relation(fields: [goalTrackingId], references: [id])
+  title          String
+  description    String?
+  isActive       Boolean      @default(true)
+  orderIndex     Int          @default(0)
+  lastCompletedAt DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  completions MicroActionCompletion[]
+}
+
+model MicroActionCompletion {
+  id            String      @id @default(cuid())
+  microActionId String
+  microAction   MicroAction @relation(fields: [microActionId], references: [id])
+  dayLogId      String
+  dayLog        GoalDayLog  @relation(fields: [dayLogId], references: [id])
+  completed     Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+
+  @@unique([microActionId, dayLogId])
 }

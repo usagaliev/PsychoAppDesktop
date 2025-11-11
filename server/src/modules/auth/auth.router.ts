@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import { OAuth2Client } from 'google-auth-library'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
@@ -31,6 +31,25 @@ const serializeUser = (user: {
   avatarUrl: user.avatarUrl,
 })
 
+const issueSession = (res: Response, user: {
+  id: string
+  email: string
+  name: string | null
+  avatarUrl: string | null
+}) => {
+  const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, { expiresIn: '7d' })
+  const isProduction = env.NODE_ENV === 'production'
+
+  return res
+    .cookie(env.SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    })
+    .json({ user: serializeUser(user), token })
+}
+
 authRouter.post(
   '/google',
   asyncHandler(async (req, res) => {
@@ -62,18 +81,32 @@ authRouter.post(
       },
     })
 
-    const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, { expiresIn: '7d' })
+    issueSession(res, user)
+  }),
+)
 
-    const isProduction = env.NODE_ENV === 'production'
+authRouter.post(
+  '/dev-login',
+  asyncHandler(async (req, res) => {
+    if (!env.ENABLE_DEV_MOCK_AUTH || env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: 'Not found' })
+    }
 
-    res
-      .cookie(env.SESSION_COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      })
-      .json({ user: serializeUser(user), token })
+    const user = await prisma.user.upsert({
+      where: { id: env.DEV_MOCK_USER_ID! },
+      update: {
+        email: env.DEV_MOCK_USER_EMAIL!,
+        name: env.DEV_MOCK_USER_NAME ?? null,
+      },
+      create: {
+        id: env.DEV_MOCK_USER_ID!,
+        googleId: `dev-${env.DEV_MOCK_USER_ID!}`,
+        email: env.DEV_MOCK_USER_EMAIL!,
+        name: env.DEV_MOCK_USER_NAME ?? null,
+      },
+    })
+
+    issueSession(res, user)
   }),
 )
 
