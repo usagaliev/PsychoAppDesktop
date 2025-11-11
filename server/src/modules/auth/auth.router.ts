@@ -64,11 +64,13 @@ authRouter.post(
 
     const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, { expiresIn: '7d' })
 
+    const isProduction = env.NODE_ENV === 'production'
+
     res
       .cookie(env.SESSION_COOKIE_NAME, token, {
         httpOnly: true,
-        secure: env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       })
       .json({ user: serializeUser(user) })
@@ -100,10 +102,12 @@ authRouter.post(
   '/logout',
   requireUser,
   asyncHandler(async (req, res) => {
+    const isProduction = env.NODE_ENV === 'production'
+
     res.clearCookie(env.SESSION_COOKIE_NAME, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
     })
 
     res.json({ success: true })
