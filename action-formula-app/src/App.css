@@ -133,6 +133,18 @@
   padding: 48px 0 80px;
 }
 
+.app-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+  will-change: opacity, transform;
+}
+
+.app-page > *:last-child {
+  margin-bottom: 0;
+}
+
 .app-footer {
   background: var(--color-surface);
   box-shadow: 0 -12px 32px rgba(28, 33, 64, 0.08);
@@ -152,6 +164,31 @@
 
 .section:last-of-type {
   margin-bottom: 0;
+}
+
+@keyframes haloPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+}
+
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
 }
 
 .hero {
@@ -205,6 +242,7 @@
   background: radial-gradient(circle at 30% 30%, rgba(91, 108, 240, 0.45), transparent 60%),
     radial-gradient(circle at 70% 70%, rgba(249, 115, 171, 0.35), transparent 55%);
   filter: blur(0.5px);
+  animation: haloPulse 14s ease-in-out infinite;
 }
 
 .hero__visual-content {
@@ -217,6 +255,7 @@
   flex-direction: column;
   gap: 16px;
   min-width: 260px;
+  animation: floatY 9s ease-in-out infinite;
 }
 
 .cta-button {
@@ -525,5 +564,16 @@
 
   .hero__title {
     font-size: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-page {
+    gap: 48px;
+  }
+
+  .hero__visual::before,
+  .hero__visual-content {
+    animation: none !important;
   }
 }
