@@ -5,6 +5,7 @@ import {
   loginWithGoogle,
   logout as logoutRequest,
   type AuthenticatedUser,
+  type LoginResponse,
 } from '../services/auth'
 import { ApiError } from '../services/http'
 
@@ -15,6 +16,7 @@ type AuthContextValue = {
   loginWithCredential: (credential: string) => Promise<void>
   logout: () => Promise<void>
   refreshProfile: () => Promise<void>
+  token: string | null
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -23,10 +25,16 @@ type Props = {
   children: React.ReactNode
 }
 
+const STORAGE_KEY = 'afc_session_token'
+
 export const AuthProvider = ({ children }: Props) => {
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    return window.localStorage.getItem(STORAGE_KEY)
+  })
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -37,6 +45,7 @@ export const AuthProvider = ({ children }: Props) => {
       if (error instanceof ApiError && error.status === 401) {
         setUser(null)
         setAuthError(null)
+        setToken(null)
         return
       }
 
@@ -58,6 +67,10 @@ export const AuthProvider = ({ children }: Props) => {
       setLoading(true)
       const response = await loginWithGoogle({ idToken: credential })
       setUser(response.user)
+      setToken(response.token)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(STORAGE_KEY, response.token)
+      }
       setAuthError(null)
       await fetchProfile()
     } catch (error) {
@@ -75,6 +88,10 @@ export const AuthProvider = ({ children }: Props) => {
     } finally {
       setUser(null)
       setAuthError(null)
+       setToken(null)
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(STORAGE_KEY)
+      }
     }
   }, [])
 
@@ -86,8 +103,9 @@ export const AuthProvider = ({ children }: Props) => {
       loginWithCredential,
       logout,
       refreshProfile: fetchProfile,
+      token,
     }),
-    [authError, fetchProfile, loading, loginWithCredential, logout, user],
+    [authError, fetchProfile, loading, loginWithCredential, logout, token, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

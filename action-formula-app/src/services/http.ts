@@ -15,20 +15,34 @@ const buildUrl = (path: string) => {
   return `${env.apiBaseUrl}${normalized}`
 }
 
+const resolveToken = () => {
+  if (typeof window === 'undefined') return null
+  return window.localStorage.getItem('afc_session_token')
+}
+
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   signal?: AbortSignal
+  headers?: Record<string, string>
 }
 
 export async function http<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal } = options
+  const { method = 'GET', body, signal, headers = {} } = options
+
+  const token = resolveToken()
+  const resolvedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...headers,
+  }
+
+  if (token && !resolvedHeaders.Authorization) {
+    resolvedHeaders.Authorization = `Bearer ${token}`
+  }
 
   const response = await fetch(buildUrl(path), {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: resolvedHeaders,
     credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal,

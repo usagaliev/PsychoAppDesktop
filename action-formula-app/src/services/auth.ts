@@ -7,12 +7,17 @@ export type AuthenticatedUser = {
   avatarUrl: string | null
 }
 
-type LoginPayload = {
+export type LoginPayload = {
   idToken: string
 }
 
+export type LoginResponse = {
+  user: AuthenticatedUser
+  token: string
+}
+
 export const loginWithGoogle = (payload: LoginPayload) =>
-  http<{ user: AuthenticatedUser }>('/auth/google', {
+  http<LoginResponse>('/auth/google', {
     method: 'POST',
     body: payload,
   })

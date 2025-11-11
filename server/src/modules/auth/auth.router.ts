@@ -73,7 +73,7 @@ authRouter.post(
         sameSite: isProduction ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000,
       })
-      .json({ user: serializeUser(user) })
+      .json({ user: serializeUser(user), token })
   }),
 )
 

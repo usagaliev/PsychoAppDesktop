@@ -11,7 +11,17 @@ type TokenPayload = {
 
 const extractToken = (req: Request): string | undefined => {
   const cookieName = env.SESSION_COOKIE_NAME
-  return req.cookies?.[cookieName]
+  const cookieToken = req.cookies?.[cookieName]
+  if (cookieToken) {
+    return cookieToken
+  }
+
+  const authHeader = req.get('authorization')
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice('Bearer '.length)
+  }
+
+  return undefined
 }
 
 export const optionalUser: RequestHandler = (req, _res, next) => {
