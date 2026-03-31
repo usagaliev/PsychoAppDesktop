@@ -1,7 +1,9 @@
 import { GoogleLogin } from '@react-oauth/google'
+import { useRef } from 'react'
 
 import { env } from '../../config/env'
 import { useAuth } from '../../contexts/AuthContext'
+import { useGoogleLoginFitWidth } from '../../hooks/useGoogleLoginFitWidth'
 
 type Props = {
   title?: string
@@ -13,6 +15,8 @@ export const SignInPrompt = ({
   description = 'Ваши данные будут храниться персонально и станут доступны на любом устройстве.',
 }: Props) => {
   const { loginWithCredential, authError } = useAuth()
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const googleWidth = useGoogleLoginFitWidth(wrapRef, { min: 200, max: 360 })
 
   if (!env.googleClientId) {
     return (
@@ -32,11 +36,14 @@ export const SignInPrompt = ({
       <p className="muted-text" style={{ marginBottom: '1.5rem' }}>
         {description}
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '320px' }}>
+      <div ref={wrapRef} className="sign-in-prompt__google">
         <GoogleLogin
           shape="pill"
           theme="filled_blue"
-          width="320"
+          size="large"
+          width={googleWidth}
+          text="continue_with"
+          locale="ru"
           onSuccess={(credentialResponse) => {
             if (credentialResponse.credential) {
               void loginWithCredential(credentialResponse.credential)

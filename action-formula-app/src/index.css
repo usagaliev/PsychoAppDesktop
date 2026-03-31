@@ -16,7 +16,7 @@ body {
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: var(--header-height);
+  scroll-padding-top: calc(var(--header-height) + env(safe-area-inset-top, 0px));
 }
 
 body {
@@ -25,6 +25,8 @@ body {
   line-height: var(--line-height-normal);
   color: var(--color-text);
   background-color: var(--color-bg);
+  padding-inline: env(safe-area-inset-left, 0) env(safe-area-inset-right, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 #root {

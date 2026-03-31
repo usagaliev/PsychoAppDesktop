@@ -234,22 +234,21 @@ export const DiagnosticsPage = () => {
               </p>
               <p className="card__description" style={{ margin: 0 }}>{activeGuidance}</p>
             </div>
-            <footer style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <footer className="diagnostics-step-footer">
               <button
                 type="button"
-                className="cta-button cta-button--ghost"
+                className="cta-button cta-button--ghost diagnostics-step-footer__btn"
                 onClick={goPrev}
                 disabled={currentStep === 0}
-                style={{ minWidth: '160px' }}
               >
                 Назад
               </button>
               {currentStep < stepOrder.length - 1 ? (
-                <button type="button" className="cta-button" onClick={goNext} style={{ minWidth: '220px' }}>
+                <button type="button" className="cta-button diagnostics-step-footer__btn" onClick={goNext}>
                   К следующему компоненту
                 </button>
               ) : (
-                <button type="submit" className="cta-button" disabled={isSaving} style={{ minWidth: '220px' }}>
+                <button type="submit" className="cta-button diagnostics-step-footer__btn" disabled={isSaving}>
                   {isSaving ? 'Сохраняем...' : 'Сохранить результат'}
                 </button>
               )}
